@@ -20,6 +20,22 @@
 // knows .update removes it. A build that is not an installed package (built
 // from source, a playtest kit) opens the release page instead.
 //
+// TODO(antivirus): 32b873e took the earlier self-update out because antivirus
+// flagged it (a bare executable downloaded, the running one renamed aside and
+// replaced). This one downloads the signed package, never renames a running
+// image and copies itself to .update/apply.exe to do the copy - milder, and
+// clean under Windows Defender on one machine (real-time and behaviour
+// monitoring on, an on-demand scan of apply.exe and the updated install), but
+// still a program that overwrites an executable and starts it. Not yet
+// checked: other antivirus (Avast, Kaspersky, Bitdefender), VirusTotal with a
+// release-built (stripped) apply.exe and package, and the players who saw the
+// first one flagged.
+// TODO(authenticode): the lasting fix is Authenticode-signing bbhost.exe (and
+// so apply.exe, its copy) in the release workflow: a signed executable keeps
+// its reputation with SmartScreen and Defender from release to release, an
+// unsigned one starts from nothing each time. The Ed25519 release key only
+// proves the download is the release; Windows does not read it.
+//
 // update.source is the "releases/latest" API URL; a private repository's
 // needs update.token_file. Nothing is sent but that token and a user agent:
 // never the account's.
