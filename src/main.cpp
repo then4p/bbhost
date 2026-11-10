@@ -145,6 +145,19 @@ void run_guest_start(GuestStart fn, void* argv, bool windowed) {
     }();
     auto pump_until_done = [&](auto is_done) {
         while (!is_done()) {
+            // F10's "Update and restart", the new release unpacked: the
+            // updater copy is started (it waits for this process to end, puts
+            // the release in place and starts it, host/updater.h), and this
+            // one ends as a window close.
+            if (windowed && updater::take_restart_request() && updater::relaunch(false)) {
+                host_log("window closed (update)");
+                perf_meter_exit();
+                host_gpu_save_pipeline_cache_at_exit();
+                host_window_stop();
+                write_pgo_profile();
+                std::fflush(nullptr);
+                _exit(0);
+            }
             if (host_gpu_device_lost()) device_lost_exit(windowed);
             if (windowed && !host_window_pump()) {
                 host_log("window closed");
@@ -936,6 +949,10 @@ void hle_watch_report() {}
 #endif
 
 int main(int argc, char** argv) {
+    // The self-update's updater copy (--apply-update, host/updater.h): the
+    // update put in place and the new build started, this process ends here.
+    // Any other start keeps its arguments for an update's restart.
+    updater::apply_if_asked(argc, argv);
 #if defined(_WIN32)
     hle_kernel_reserve_guest_windows();  // before anything else can take those addresses
     write_watch_install();               // the vectored handler for write-protected texture memory

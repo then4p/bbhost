@@ -117,6 +117,23 @@ int main() {
     check(!release_page_ok("https://github.com/\xc3\xa9"), "bytes past ASCII");
     check(!release_page_ok("https://github.com/" + std::string(600, 'a')), "too long");
 
+    {
+        const std::string sums =
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef  bbhost.exe\n"
+            "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789 *bbhost-win-v0.2.31.zip\r\n"
+            "zz23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef  bbhost-linux-v0.2.31.tar.gz\n";
+        check(manifest_hash(sums, "bbhost.exe") == "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "a listed file");
+        check(manifest_hash(sums, "bbhost-win-v0.2.31.zip") == "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+              "binary mode, CRLF, upper case");
+        check(manifest_hash(sums, "bbhost-linux-v0.2.31.tar.gz").empty(), "a hash that is not hex");
+        check(manifest_hash(sums, "bbhost").empty(), "a name only a prefix of a listed one");
+        check(manifest_hash("", "bbhost.exe").empty(), "an empty manifest");
+    }
+    check(package_name("win", "v0.2.31") == "bbhost-win-v0.2.31.zip", "the Windows zip");
+    check(package_name("linux", "v0.2.31") == "bbhost-linux-v0.2.31.tar.gz", "the Linux tarball");
+    check(package_name("steamdeck", "v0.2.31") == "bbhost-steamdeck-v0.2.31.tar.gz", "the Steam Deck kit");
+    check(package_name("", "v0.2.31").empty() && package_name("playtest", "v0.2.31").empty(), "no package for anything else");
+
     if (failures) return 1;
     std::printf("updater_test: all checks passed\n");
     return 0;

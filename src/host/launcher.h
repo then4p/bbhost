@@ -21,4 +21,7 @@ enum class LauncherResult { Play, Quit };
 // caller reads the configuration again) or closes it. `reason` says why it
 // opened ("" when asked for).
 // `plugins_tab` opens it on the plugin manager (host/plugin_ui.h).
+// The update button ("vX is out") installs the newer release and restarts
+// into it when this install can update itself (updater::can_install): the
+// window ends the process then, without returning.
 LauncherResult launcher_run(const HostConfig& cfg, const std::string& reason, bool plugins_tab = false);

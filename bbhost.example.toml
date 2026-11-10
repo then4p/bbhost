@@ -246,9 +246,15 @@ auto_replenish = true
 [update]
 # A release build looks for a newer release at start, and so does the setup
 # window while its Updates box is checked. When there is one, the F10 screen
-# (UPDATES) and the setup window say so, and a button opens its release page
-# in the browser to download it from there. A build from source never looks
-# unless this says true.
+# (UPDATES) and the setup window say so. An installed package (the Windows
+# zip, the Linux tarball or the Steam Deck kit) updates itself from there:
+# the button downloads the same package of the newer release, checks it
+# against the release's signed checksums, installs it over this copy and
+# restarts (with the window open, close the setup window first). Before the
+# game starts, the new version compiles its shaders (--compile-shaders: the
+# log shows it), building again any it cannot use. Anything else (a build from
+# source, a playtest kit) gets a button that opens the release page instead.
+# A build from source never looks unless this says true.
 # check = true
 # Where releases are: a GitHub "releases/latest" API URL.
 # source = "https://api.github.com/repos/droogie/bbhost/releases/latest"

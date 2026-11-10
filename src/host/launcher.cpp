@@ -442,6 +442,9 @@ LauncherResult launcher_run(const HostConfig& cfg, const std::string& reason, bo
     double saved_at = -100.0;
     LauncherResult result = LauncherResult::Quit;
     bool done = false;
+    // A self-update's restart (the update button): the window closes, then
+    // the updater copy starts and this process ends (host/updater.h).
+    bool update_restart = false;
     int page = plugins_tab ? kPagePlugins : kPageGame;
     double page_at = 0.0;  // when it was chosen: it fades in
     // BBHOST_SETUP_TEST=play|quit: the window answers itself after a few
@@ -742,6 +745,12 @@ LauncherResult launcher_run(const HostConfig& cfg, const std::string& reason, bo
         const bool compiling = compile_job.running();
         const bool can_play = app0_ok && eboot.ok && !compiling && !game;
         bool play = false;
+        // The update button's release unpacked: the window closes and the
+        // updater copy starts (below, after the window is gone).
+        if (updater::take_restart_request()) {
+            update_restart = true;
+            done = true;
+        }
         const SignIn si = sign_in_state();
 
         // The sidebar: the name, the pages, and Play.
@@ -768,15 +777,30 @@ LauncherResult launcher_run(const HostConfig& cfg, const std::string& reason, bo
                               ImGuiWindowFlags_NoBackground);
             const float w = ImGui::GetContentRegionAvail().x;
             ui::logo(kName, BBHOST_VERSION, w, vp->WorkSize.y < 700 * scale);
-            if (check_updates && updater::update_available()) {
-                // A newer release: its tag, a click away from its page.
-                const std::string tag = updater::latest_tag() + " is out";
+            if (check_updates && (updater::update_available() || updater::installing())) {
+                // A newer release: its tag, a click away from installing it
+                // (an installed package: host/updater.h), else from its page.
+                const bool installing = updater::installing();
+                const bool installable = updater::can_install();
+                const std::string tag = installing    ? updater::install_label()
+                                        : installable ? "Update to " + updater::latest_tag()
+                                                      : updater::latest_tag() + " is out";
                 const float bw = ImGui::CalcTextSize(tag.c_str()).x + st.FramePadding.x * 2;
                 ImGui::SetCursorPosX((w - bw) * 0.5f);
                 ImGui::PushStyleColor(ImGuiCol_Text, ui::kWarn);
-                if (ui::ghost_button(tag.c_str())) updater::open_release_page();
+                ImGui::BeginDisabled(installing || compiling || game != nullptr);
+                if (ui::ghost_button(tag.c_str())) {
+                    if (installable) updater::install();
+                    else updater::open_release_page();
+                }
+                ImGui::EndDisabled();
                 ImGui::PopStyleColor();
-                ui::tooltip_for_item(nullptr, "Open the release page");
+                const std::string tip = installing    ? updater::detail()
+                                        : installable ? "Downloads " + updater::latest_tag() +
+                                                            " (this same package), checks its signature, installs it over this copy and "
+                                                            "restarts. Shader caches the new version cannot use are built again."
+                                                      : std::string("Open the release page");
+                ui::tooltip_for_item(nullptr, tip.c_str());
             }
             ImGui::Dummy(ImVec2(0, 8 * scale));
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(st.ItemSpacing.x, 3 * scale));
@@ -1792,6 +1816,17 @@ LauncherResult launcher_run(const HostConfig& cfg, const std::string& reason, bo
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    if (update_restart) {
+        // The update button's release, unpacked: it waits for this process
+        // to end, puts the release in place and starts it with --setup.
+        host_log("setup: closed to update");
+        if (updater::relaunch(true)) {
+            std::fflush(nullptr);
+            std::_Exit(0);
+        }
+        host_log("setup: the update's restart failed (see above); start bbhost again");
+        return LauncherResult::Quit;
+    }
     host_log("setup: %s", result == LauncherResult::Play ? "play" : "closed");
     return result;
 }

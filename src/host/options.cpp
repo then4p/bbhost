@@ -773,7 +773,7 @@ const Row g_rows[] = {
     {Row::Info, nullptr, -1, 10},
     {Row::Info, nullptr, -1, 11},
     {Row::Action, "Check for updates", -1, 10},
-    {Row::Action, "Open the release page", -1, 11},
+    {Row::Action, "Update and restart", -1, 11},  // or "Open the release page" (updates_page)
     {Row::Close, "Close"},
 };
 constexpr int kRowCount = static_cast<int>(sizeof(g_rows) / sizeof(g_rows[0]));
@@ -897,14 +897,19 @@ void link_thread() {
 // The UPDATES buttons, and whether each can do anything right now.
 void update_action(int which) {
     if (which == 10) updater::check_now();
-    if (which == 11) updater::open_release_page();
+    // An installed package updates itself and restarts (main's loop takes
+    // the restart); anything else gets the release page.
+    if (which == 11) {
+        if (updater::can_install()) updater::install();
+        else updater::open_release_page();
+    }
 }
 
 bool action_idle(int which) {
     // A website code needs a sign-in the server still takes.
     if (which == 3 && net::account_refused()) return false;
     if (which < 10) return !g_acct_busy.load();
-    if (updater::busy()) return false;
+    if (updater::busy() || updater::installing()) return false;
     if (which == 11) return updater::update_available();
     return true;
 }
@@ -2334,8 +2339,12 @@ void action_button(const char* label, int which, bool primary, const char* name 
         pressed = ui::ghost_button(label);
         ImGui::EndDisabled();
     }
-    const char* note = which < 5 ? kAccountNotes[which] : which == 10 ? "Asks GitHub for the newest release."
-                                                                      : "Opens the newer release's page in your browser.";
+    const char* note = which < 5      ? kAccountNotes[which]
+                       : which == 10 ? "Asks GitHub for the newest release."
+                       : updater::can_install()
+                           ? "Downloads the newer release of this same package, checks its signature, installs it over this copy and "
+                             "restarts into it. Shader caches the new version cannot use are built again before the game starts."
+                           : "Opens the newer release's page in your browser.";
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_AllowWhenDisabled)) ui::tooltip(nullptr, note);
     if (pressed && idle) {
         host_options_post([which, n = std::string(name), c = std::string(code)] {
@@ -2417,7 +2426,13 @@ void updates_page() {
     ImGui::Spacing();
     action_button("Check for updates", 10, true);
     ImGui::SameLine();
-    action_button("Open the release page", 11, false);
+    if (updater::installing()) {
+        ImGui::BeginDisabled();
+        ui::ghost_button(updater::install_label().c_str());
+        ImGui::EndDisabled();
+    } else {
+        action_button(updater::can_install() ? "Update and restart" : "Open the release page", 11, false);
+    }
     ui::card_end();
 }
 
